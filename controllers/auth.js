@@ -2,6 +2,7 @@
 const asyncHandler = require('../middlewares/async');
 const ErrorResponse = require('../utils/errorResponse');
 const crypto = require('crypto');
+const path = require('path');
 
 // IMPORTING THE UTILS
 const mailer = require('../utils/sendEmail');
@@ -23,7 +24,7 @@ exports.register = asyncHandler(async (req, res, next) => {
         role
     });
 
-    sendTokenResponse(user, 200, res);
+    sendTokenResponse(user, 200, res, req);
 });
 
 // @desc        Loging in a user
@@ -67,6 +68,50 @@ exports.getMe = asyncHandler(async (req, res, next) => {
         success: true,
         user
     });
+});
+
+// @desc        Update user photo profile
+// @route       PUT /api/v1/auth/updatephoto
+// @access      Private
+exports.updatePhoto = asyncHandler(async (req, res, next) => {
+
+    if (!req.files || !req.files.photo) {
+        return next(new ErrorResponse(`Please input a photo`, 400));
+    }
+
+    const photo = req.files.photo;
+
+    if (!photo.mimetype.startsWith('image')) {
+        return next(new ErrorResponse('Please only upload an image', 400));
+    }
+
+    if (!photo.size > process.env.MAX_FILE_UPLOAD) {
+        return next(new ErrorResponse(`Please upload an image that is less than ${process.env.MAX_FILE_UPLOAD}`, 400));
+    }
+
+    photo.name = `user_photo_${req.user._id}${path.parse(photo.name).ext}`;
+
+    const photoLink = `${req.protocol}://${req.get('host')}/uploads/${photo.name}`;
+
+    // moving the file
+    photo.mv(`${process.env.FILE_UPLOAD_PATH}/${photo.name}`, (err) => {
+        if (err) {
+            return next(new ErrorResponse('Problem with uploading a photo', 500));
+        }
+    });
+
+    await User.findByIdAndUpdate(req.user._id, {
+        photo: photoLink
+    }, {
+        runValidators: true,
+        new: true
+    });
+
+    res.status(200).json({
+        success: true
+    });
+
+
 });
 
 // @desc        Forgot password
@@ -227,8 +272,23 @@ exports.logout = asyncHandler(async (req, res, next) => {
 });
 
 // get token from model, create cookie and send response
-const sendTokenResponse = (user, statusCode, res) => {
+const sendTokenResponse = (user, statusCode, res, req) => {
     const token = user.getSignedJwtToken();
+    let jsonObj;
+
+    if (req) {
+        const link = `${req.protocol}://${req.get('host')}/api/v1/auth/updatephoto`;
+        jsonObj = {
+            success: true,
+            token,
+            contentUrl: link
+        };
+    }else {
+        jsonObj = {
+            success: true,
+            token
+        };
+    }
 
     // creating cookie using cookier parser
     const cookieOptions = {
@@ -243,8 +303,5 @@ const sendTokenResponse = (user, statusCode, res) => {
     res
     .status(statusCode)
     .cookie('token', token, cookieOptions)
-    .json({
-        success: true,
-        token
-    });
+    .json(jsonObj);
 };

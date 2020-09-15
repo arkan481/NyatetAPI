@@ -45,8 +45,20 @@ exports.authorize = (...roles) => {
 };
 
 // auth ownership for delete and update request
-exports.ownerize = (mongoose) => asyncHandler(async(req, res, next) => {
-    const data = await mongoose.findById(req.params.id);
+exports.ownerize = (mongoose, customParam) => asyncHandler(async(req, res, next) => {
+    let param;
+
+    if(customParam) {
+        const paramString = JSON.stringify(req.params).match(customParam).input;
+        const paramObj = JSON.parse(paramString);
+
+        param = Object.values(paramObj);
+        
+    }else {
+        param = req.params.id;
+    }
+
+    const data = await mongoose.findById(param);
 
     if(!data) {
         return next();

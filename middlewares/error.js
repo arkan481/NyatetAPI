@@ -24,8 +24,11 @@ const errorHandler = (err, req, res, next) => {
     }
 
     if (err.code === 11000) {
+        const duplicateObj = err.keyPattern;
+        const duplicateKeys = Object.keys(duplicateObj);
+
         // duplicate key error
-        const message = `Duplicate field value entered`;
+        const message = `${duplicateKeys} already exists!`;
         error = new ErrorResponse(message, 400);
     }
 

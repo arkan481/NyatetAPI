@@ -2,7 +2,7 @@
 
 const express = require('express');
 
-const { register, login, logout, getMe, forgotPassword, resetPassword, updateDetails, updatePassword } = require('../controllers/auth');
+const { register, login, logout, getMe, forgotPassword, resetPassword, updateDetails, updatePassword, updatePhoto } = require('../controllers/auth');
 
 const { protect } = require('../middlewares/auth');
 
@@ -30,5 +30,8 @@ router
 .put('/updatepassword', protect, updatePassword);
 
 router.get('/logout', protect, logout);
+
+router
+.put('/updatephoto', protect, updatePhoto);
 
 module.exports = router;

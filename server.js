@@ -82,6 +82,11 @@ app.use('/api/v1/auth', auth);
 // using the custom error handler middleware
 app.use(errorHandler);
 
+// 404 Page
+app.use((req,res,next) => {
+    res.status(404).send('Please read the documentation');
+});
+
 // defining the port
 const PORT = process.env.PORT || 5000;
 

@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
 const UserSchema = new mongoose.Schema({
-    "username": {
+    username: {
         type: String,
         required: true,
         minlength: [5, 'Username should have more than 5 characters long'],
@@ -32,6 +32,22 @@ const UserSchema = new mongoose.Schema({
         type: String,
         default: "no-photo.jpg"
     },
+    identities: {
+        unique: true,
+        type: [{
+            provider: {
+                type: String,
+                required: true,
+                unique: true,
+                enum: ['facebook', 'google']
+            },
+            auth_id: {
+                type: String,
+                required: true,
+                unique: true
+            }
+        }
+    ]},
     resetPasswordToken: String,
     resetPasswordExpired: Date,
     createdAt: {
@@ -56,7 +72,10 @@ UserSchema.pre('save', async function (next) {
 UserSchema.methods.getSignedJwtToken = function () {
     return jwt.sign({
         // the payload is the id of the user
-        id: this._id
+        id: this._id,
+        username: this.username,
+        photo: this.photo,
+        identities: this.identities
     }, process.env.JWT_SECRET, {
         expiresIn: process.env.JWT_EXPIRE
     });

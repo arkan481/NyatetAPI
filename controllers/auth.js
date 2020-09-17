@@ -3,6 +3,8 @@ const asyncHandler = require('../middlewares/async');
 const ErrorResponse = require('../utils/errorResponse');
 const crypto = require('crypto');
 const path = require('path');
+const http = require('https');
+const { OAuth2Client } = require('google-auth-library');
 
 // IMPORTING THE UTILS
 const mailer = require('../utils/sendEmail');
@@ -14,15 +16,78 @@ const User = require('../models/Users');
 // @route       POST /api/v1/auth/register
 // @access      Public
 exports.register = asyncHandler(async (req, res, next) => {
-    const { username, email, password, role} = req.body;
+    const { username, email, password, role, identities } = req.body;
 
-    // Create user
-    const user = await User.create({
-        username,
-        email,
-        password,
-        role
-    });
+    let user;
+
+    if (identities) {
+        user = await User.findOne({ email });
+
+        const provider = identities.provider;
+        let isAValidToken;
+
+        if (provider === 'facebook') {
+            isAValidToken = await validateFBToken(identities.auth_id);
+        } else if (provider === 'google') {
+            try {
+                isAValidToken = await validateGoogleToken(identities.auth_id);
+            } catch (error) {
+                return next(new ErrorResponse(`Invalid Provider Token!`, 401));
+            }
+        }
+        else {
+            return next(new ErrorResponse(`Unknown Login Provider: ${provider}`, 400));
+        }
+
+        if (!isAValidToken) {
+            return next(new ErrorResponse(`Invalid Provider Token!`, 401));
+        }
+
+        if (user) {
+            const registeredUser = await User.findOne({
+                email,
+                identities: {
+                    $elemMatch: identities
+                }
+            });
+
+            if (!registeredUser) {
+                // LINKING AN ACCOUNT WITH DIFFERENT LOGIN PROVIDER
+                await user.update({
+                    $addToSet: {
+                        identities: identities
+                    }
+                }, {
+                    runValidators: true,
+                    new: true
+                });
+            } else {
+                // LOGGING IN AN ACCOUNT WITH DIFFERENT LOGIN PROVIDER
+                return sendTokenResponse(registeredUser, 200, res);
+            }
+
+        } else {
+            // CREATING ACCOUNT WITH DIFFERENT LOGIN PROVIDER
+            user = await User.create({
+                username,
+                email,
+                role,
+                $addToSet: {
+                    identities
+                },
+                password: identities.auth_id
+            });
+        }
+
+    } else {
+        // CREATING ACCOUNT WITH ORDINARY SIGNUP
+        user = await User.create({
+            username,
+            email,
+            password,
+            role
+        });
+    }
 
     sendTokenResponse(user, 200, res, req);
 });
@@ -31,27 +96,28 @@ exports.register = asyncHandler(async (req, res, next) => {
 // @route       POST /api/v1/auth/login
 // @access      Public
 exports.login = asyncHandler(async (req, res, next) => {
+    console.log('login called', req.body);
     const { email, password } = req.body;
 
     // validate email & password
-    if(!email || !password) {
-        return next(new ErrorResponse('Please add the email and the password', 404));
+    if (!email || !password) {
+        return next(new ErrorResponse('Please add the email and the password', 400));
     }
 
     // Check for user
-    const user = await User.findOne({email}).select('+password');
+    const user = await User.findOne({ email }).select('+password');
 
-    if(!user) {
+    if (!user) {
         return next(new ErrorResponse('Invalid Credentials', 401));
     }
 
     // check if password matches
     const isMatch = await user.matchPassword(password);
 
-    if(!isMatch) {
+    if (!isMatch) {
         return next(new ErrorResponse('Invalid Credentials', 401));
     }
-    
+
     sendTokenResponse(user, 200, res);
 
 });
@@ -61,7 +127,7 @@ exports.login = asyncHandler(async (req, res, next) => {
 // @access      Private
 exports.getMe = asyncHandler(async (req, res, next) => {
     // the user id is fetched from the auth middleware after authorization
-    
+
     const user = await User.findById(req.user._id);
 
     res.status(200).json({
@@ -119,16 +185,16 @@ exports.updatePhoto = asyncHandler(async (req, res, next) => {
 // @access      Public
 exports.forgotPassword = asyncHandler(async (req, res, next) => {
 
-    if(!req.body.email) {
+    if (!req.body.email) {
         return next(new ErrorResponse('Email field is required', 400));
     }
-    
+
     const user = await User.findOne({
         email: req.body.email
     });
 
-    if(!user) {
-        return next(new ErrorResponse(`No user associated with ${req.body.email}`,404));
+    if (!user) {
+        return next(new ErrorResponse(`No user associated with ${req.body.email}`, 404));
     }
 
     // Get reset token
@@ -185,7 +251,7 @@ exports.resetPassword = asyncHandler(async (req, res, next) => {
         }
     });
 
-    if(!user) {
+    if (!user) {
         return next(new ErrorResponse(`Invalid Token`, 400));
     }
 
@@ -215,34 +281,34 @@ exports.updateDetails = asyncHandler(async (req, res, next) => {
         new: true
     });
 
-    if(!data) {
+    if (!data) {
         return next(new ErrorResponse(`The user with id: ${updatingID} is not found`, 400));
     }
 
     res
-    .status(200)
-    .json({
-        success: true,
-        data
-    });
+        .status(200)
+        .json({
+            success: true,
+            data
+        });
 
 });
 
 // @desc        Update user password
 // @route       PUT /api/v1/auth/updatepassword
 // @access      Private
-exports.updatePassword = asyncHandler(async(req, res, next) => {
-    const { oldPassword, newPassword } = req.body; 
+exports.updatePassword = asyncHandler(async (req, res, next) => {
+    const { oldPassword, newPassword } = req.body;
 
-    if(!oldPassword || !newPassword) {
+    if (!oldPassword || !newPassword) {
         return next(new ErrorResponse('Please input your old password and your new password', 400));
     }
 
     const user = await User.findById(req.user.id).select('+password');
-    
+
     const isMatch = await user.matchPassword(oldPassword);
 
-    if(!isMatch) {
+    if (!isMatch) {
         return next(new ErrorResponse('Invalid Credentials', 400));
     }
 
@@ -283,7 +349,7 @@ const sendTokenResponse = (user, statusCode, res, req) => {
             token,
             contentUrl: link
         };
-    }else {
+    } else {
         jsonObj = {
             success: true,
             token
@@ -296,12 +362,61 @@ const sendTokenResponse = (user, statusCode, res, req) => {
         httpOnly: true,
     };
 
-    if(process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV === 'production') {
         cookieOptions.secure = true;
     }
 
     res
-    .status(statusCode)
-    .cookie('token', token, cookieOptions)
-    .json(jsonObj);
+        .status(statusCode)
+        .cookie('token', token, cookieOptions)
+        .json(jsonObj);
+};
+
+const validateFBToken = async (accessToken) => {
+    return new Promise((resolve, reject) => {
+
+        const options = new URL(`https://graph.facebook.com/debug_token?access_token=${process.env.ACCESS_TOKEN_FB}&input_token=${accessToken}`);
+
+        const req = http.request(options, (res) => {
+
+            res.on('data', (chunk) => {
+                const data = JSON.parse(chunk);
+
+                if (data.error) {
+                    // INVALID ACCESS TOKEN
+                    resolve(false);
+                } else {
+                    // VALID ACCESS TOKEN
+                    if (data.data.error) {
+                        resolve(false);
+                    } else {
+                        resolve(true);
+                    }
+                }
+            });
+
+        });
+
+        req.on('error', (e) => {
+            reject(e.message);
+        });
+
+        req.end();
+
+    });
+
+};
+
+const validateGoogleToken = async (token) => {
+    const client = new OAuth2Client(token);
+
+    const ticket = await client.verifyIdToken({
+        idToken: token,
+        audience: process.env.GOOGLE_CLIENT_ID_ANDROID
+    });
+
+    const payload = ticket.getPayload();
+
+    return payload;
+
 };

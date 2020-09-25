@@ -30,6 +30,7 @@ const UserSchema = new mongoose.Schema({
     },
     photo: {
         type: String,
+        required: false,
         default: "user-silhouette.png"
     },
     identities: {

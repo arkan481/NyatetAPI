@@ -30,21 +30,18 @@ const UserSchema = new mongoose.Schema({
     },
     photo: {
         type: String,
-        default: "no-photo.jpg"
+        default: "user-silhouette.png"
     },
     identities: {
-        unique: true,
         type: [{
             provider: {
                 type: String,
                 required: true,
-                unique: true,
                 enum: ['facebook', 'google']
             },
             auth_id: {
                 type: String,
-                required: true,
-                unique: true
+                required: true
             }
         }
     ]},

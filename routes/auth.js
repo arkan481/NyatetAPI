@@ -6,7 +6,7 @@ const { register, login, logout, getMe, forgotPassword, resetPassword, updateDet
 
 const { protect } = require('../middlewares/auth');
 
-const  router  = express.Router();
+const router = express.Router();
 
 router
 .post('/register', register);

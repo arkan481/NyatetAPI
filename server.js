@@ -28,6 +28,7 @@ const db = require('./config/db');
 
 // ######### ROUTE FILES #########
 const auth = require('./routes/auth');
+const catetan = require('./routes/catetan');
 
 // instantiating express
 const app = express();
@@ -78,6 +79,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ######### MOUNTING THE ROUTERS #########
 app.use('/api/v1/auth', auth);
+app.use('/api/v1/catetan', catetan);
 
 // using the custom error handler middleware
 app.use(errorHandler);

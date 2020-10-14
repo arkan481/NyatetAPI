@@ -94,7 +94,7 @@ const PORT = process.env.PORT || 5000;
 
 // running the server
 const server = app.listen(PORT, () => {
-    console.log(`Server in running in ${process.env.NODE_ENV} mode on port: ${PORT}`.yellow.bold);
+    console.log(`Server is running in ${process.env.NODE_ENV} mode on port: ${PORT}`.yellow.bold);
 });
 
 // handling all unhandled promise rejctions

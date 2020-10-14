@@ -1,7 +1,15 @@
 const mongoose = require('mongoose');
 
 const connectDB = async () => {
-    const conn = await mongoose.connect(process.env.MONGO_URI, {
+    var MONGO_URI;
+
+    if(process.env.NODE_ENV === 'production') {
+        MONGO_URI = process.env.MONGO_URI_PRODUCTION;
+    } else {
+        MONGO_URI = process.env.MONGO_URI_DEVELOPMENT;
+    }
+
+    const conn = await mongoose.connect(MONGO_URI, {
         useNewUrlParser: true,
         useCreateIndex: true,
         useFindAndModify: false,
